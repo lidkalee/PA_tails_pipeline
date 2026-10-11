@@ -37,3 +37,7 @@ fasta/index_masked_genome_star/*
 
 # Locally compiled STAR on Apple Silicon
 /tools/STAR
+
+# User-generated sample manifest
+/samples.tsv
+/demo/batch_samples.tsv

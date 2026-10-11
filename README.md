@@ -29,6 +29,36 @@ For fast helper checks without the bioinformatics environment (also run by Linux
 python3 -m unittest discover -s tests -v
 ```
 
+## Process many samples
+
+Put R1 files in one directory and R2 files in another. The pairing helper matches the shared sample ID, for example `patient7_R1_001.fastq.gz` with `patient7_R2_001.fastq.gz`. It refuses unmatched or duplicate IDs so a partial name cannot silently pair the wrong files.
+
+```bash
+python scripts/make_samplesheet.py \
+  --r1-dir fastq_R1 --r2-dir fastq_R2 --output samples.tsv
+cat samples.tsv
+snakemake --config samples=samples.tsv --cores 8
+```
+
+The generated tab-separated `samples.tsv` has `sample`, `R1`, and `R2` columns. Inspect it before running. Paths are relative to the repository root when possible; files outside it use absolute paths. The generated sheet is ignored by Git. To regenerate it after adding files, pass `--force`.
+
+If names differ beyond the `R1`/`R2` token, provide regular expressions with a named `sample` group. For example, for `patient7_read1_runA.fastq.gz` and `patient7_read2_runA.fastq.gz`:
+
+```bash
+python scripts/make_samplesheet.py \
+  --r1-dir fastq_R1 --r2-dir fastq_R2 --output samples.tsv \
+  --r1-regex '^(?P<sample>.+)_read1_runA\.fastq\.gz$' \
+  --r2-regex '^(?P<sample>.+)_read2_runA\.fastq\.gz$'
+```
+
+For irregular filenames, write `samples.tsv` manually with one row per pair. Each row must have a unique sample ID using ASCII letters, digits, `_`, or `-`. Multiple lanes for one biological sample should be merged into paired FASTQs first, or listed as separate lane-specific sample IDs.
+
+A two-sample smoke test exercises automatic pairing and sample-specific outputs:
+
+```bash
+bash scripts/run_batch_demo.sh
+```
+
 ## Prepare human references
 
 Use matching human reference releases. The original analysis used GENCODE v47 `gencode.v47.pc_transcripts.fa`, `GRCh38.primary_assembly.genome.fa`, and a matching GTF from [GENCODE](https://www.gencodegenes.org/human/). The bundled `annotation/gene_annotations.rds` has `gene_id`, `seqnames`, `start`, `end`, and `strand` columns; gene IDs and chromosome naming in the input references must agree with it. Transcript FASTA headers must begin with `transcript_id|gene_id` (as in the GENCODE protein-coding transcript FASTA). Paths and index prefixes are configurable, so these names are examples rather than required filenames.
@@ -66,7 +96,7 @@ snakemake --configfile config.yaml --cores 8
 
 `--cores` is the machine-wide limit; `threads` is the per-alignment maximum. The three final files are `R_output/<sample>_final_big.rds`, `R_output/<sample>_final_small.rds`, and `R_output/<sample>_deduplication.csv`. The full table includes read-level alignment, tail composition, class, and type; the small table keeps the analysis columns without read identifiers, UMI, or raw sequence. The CSV reports counts before and after gene-plus-UMI deduplication.
 
-Use a different sample name and FASTQ paths in a copied config file for another sample, for example `snakemake --configfile sample2.yaml --cores 8`. Intermediate files are sample-specific, so previous sample outputs can remain in place. For a dry run, add `-n`. If inputs or references change after a run, use `--forcerun` on the relevant rule or remove the affected outputs before rerunning.
+For multiple samples, use the sample sheet above. Intermediate files are sample-specific, so previous sample outputs can remain in place. For a dry run, add `-n`. If inputs or references change after a run, use `--forcerun` on the relevant rule or remove the affected outputs before rerunning.
 
 ## Troubleshooting
 

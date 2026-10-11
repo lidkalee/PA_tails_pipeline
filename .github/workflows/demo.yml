@@ -18,4 +18,4 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Run the complete synthetic demo
         shell: micromamba-shell {0}
-        run: bash scripts/run_demo.sh
+        run: bash scripts/run_batch_demo.sh
