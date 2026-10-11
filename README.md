@@ -31,7 +31,7 @@ python3 -m unittest discover -s tests -v
 
 ## Process many samples
 
-Put R1 files in one directory and R2 files in another. The pairing helper matches the shared sample ID, for example `patient7_R1_001.fastq.gz` with `patient7_R2_001.fastq.gz`. It refuses unmatched or duplicate IDs so a partial name cannot silently pair the wrong files.
+Put R1 files in one directory and R2 files in another (or use the same directory for both arguments if both mates are together). The pairing helper matches the shared sample ID, for example `may2026_PB25_2_R1.fastq.gz` with `may2026_PB25_2_R2.fastq.gz` (sample ID `may2026_PB25_2`). It refuses unmatched or duplicate IDs so a partial name cannot silently pair the wrong files.
 
 ```bash
 python scripts/make_samplesheet.py \

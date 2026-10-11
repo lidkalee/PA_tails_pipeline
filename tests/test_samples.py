@@ -32,6 +32,14 @@ class SampleSheetTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             write_sheet(pairs, output)
 
+    def test_user_filename_pattern_in_one_folder(self):
+        (self.r1 / "may2026_PB25_2_R1.fastq.gz").touch()
+        (self.r1 / "may2026_PB25_2_R2.fastq.gz").touch()
+        pairs = discover_pairs(self.r1, self.r1)
+        self.assertEqual(list(pairs), ["may2026_PB25_2"])
+        self.assertEqual(pairs["may2026_PB25_2"][0].name, "may2026_PB25_2_R1.fastq.gz")
+        self.assertEqual(pairs["may2026_PB25_2"][1].name, "may2026_PB25_2_R2.fastq.gz")
+
     def test_partial_overlap_does_not_pair_wrong_samples(self):
         (self.r1 / "patient7_R1.fq").touch()
         (self.r2 / "patient70_R2.fq").touch()
