@@ -1,0 +1,21 @@
+name: Demo and helper tests
+'on':
+  push:
+    branches: [main, repaired]
+  pull_request:
+
+jobs:
+  linux-demo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mamba-org/setup-micromamba@v3
+        with:
+          environment-file: environment.yml
+          cache-environment: true
+      - name: Test FASTQ and SAM helpers
+        shell: micromamba-shell {0}
+        run: python -m unittest discover -s tests -v
+      - name: Run the complete synthetic demo
+        shell: micromamba-shell {0}
+        run: bash scripts/run_demo.sh

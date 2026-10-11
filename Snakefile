@@ -1,125 +1,132 @@
-sample = config["sample"]
+"""Paired-end AT-tail analysis. Run from the repository root."""
+
+from pathlib import Path
+
+configfile: "config.yaml"
+
+SAMPLE = str(config["sample"])
+if not SAMPLE or not all(c.isalnum() or c in "_-" for c in SAMPLE):
+    raise ValueError("config 'sample' must contain only letters, digits, '_' or '-'")
+
+R1 = str(config["R1"])
+R2 = str(config["R2"])
+TRANSCRIPTOME_INDEX = str(config["transcriptome_index"])
+GENOME_INDEX = str(config["genome_index"])
+STAR_INDEX = str(config["star_index"])
+ANNOTATION = str(config["annotation"])
+def bowtie_first_index(prefix):
+    for suffix in (".1.bt2", ".1.bt2l"):
+        if Path(prefix + suffix).exists():
+            return prefix + suffix
+    return prefix + ".1.bt2"
+
+
+THREADS = int(config.get("threads", 4))
+if THREADS < 1:
+    raise ValueError("config 'threads' must be at least 1")
+
+rule all:
+    input:
+        f"R_output/{SAMPLE}_final_big.rds",
+        f"R_output/{SAMPLE}_final_small.rds",
+        f"R_output/{SAMPLE}_deduplication.csv"
 
 rule align_read1:
     input:
-        fastq=config["R1"]
+        fastq=R1,
+        index=bowtie_first_index(TRANSCRIPTOME_INDEX)
     output:
-        f"sam/{sample}_R1_aligned.sam"
+        f"sam/{SAMPLE}_R1_aligned.sam"
+    threads: THREADS
+    params:
+        index=TRANSCRIPTOME_INDEX
     shell:
-        """
-        bowtie2 -x fasta/index_bowtie_transcriptome/prot_coding_ -U {input} -S {output} --no-unal
-        """
+        "bowtie2 --threads {threads} --no-unal -x {params.index:q} "
+        "-U {input.fastq:q} -S {output:q}"
 
-rule extract_read1_names:
+rule select_read_pairs:
     input:
-        f"sam/{sample}_R1_aligned.sam"
+        sam=f"sam/{SAMPLE}_R1_aligned.sam",
+        r1=R1,
+        r2=R2
     output:
-        f"sam/{sample}_R1_names.txt"
+        r1=f"fastq_read1/{SAMPLE}_R1_selected.fq",
+        r2=f"fastq_read2/{SAMPLE}_R2_selected.fq"
     shell:
-        """
-        awk '{{if ($1 !~ /^@/) print $1}}' {input} | sort | uniq > {output}
-        """
-
-rule filter_read2_mates:
-    input:
-        fastqR2 = config["R2"],
-        fastqR1 = config["R1"],
-        names = f"sam/{sample}_R1_names.txt"
-    output:
-        read2_aligned = f"fastq_read2/{sample}_R2_R1aligned.fq",
-        read1_aligned = f"fastq_read1/{sample}_R1_R1aligned.fq"
-    shell:
-        """
-        seqtk subseq {input.fastqR2} {input.names} > {output.read2_aligned}
-        seqtk subseq {input.fastqR1} {input.names} > {output.read1_aligned}
-        """
-
-rule filter_read2_with_adapter_sequence:
-    input:
-        f"fastq_read2/{sample}_R2_R1aligned.fq"
-    output:
-        f"fastq_read2/{sample}_R2_adapter.fq"
-    shell:
-        """
-        grep -E -A 2 -B 1 --no-group-separator "^[ATCGN]{{15}}GTCAG" {input} > {output}
-        """
+        "python R_scripts/select_read_pairs.py --sam {input.sam:q} "
+        "--r1 {input.r1:q} --r2 {input.r2:q} "
+        "--out-r1 {output.r1:q} --out-r2 {output.r2:q}"
 
 rule fastp_filtering:
     input:
-        read1 = f"fastq_read1/{sample}_R1_R1aligned.fq",
-        read2 = f"fastq_read2/{sample}_R2_adapter.fq"
+        r1=f"fastq_read1/{SAMPLE}_R1_selected.fq",
+        r2=f"fastq_read2/{SAMPLE}_R2_selected.fq"
     output:
-        read1_fp = f"fastq_read1/{sample}_R1_fp.fq",
-        read2_fp = f"fastq_read2/{sample}_R2_fp.fq",
-        report = f"fastq_read2/{sample}_fp_report.html"
+        r1=f"fastq_read1/{SAMPLE}_R1_fp.fq",
+        r2=f"fastq_read2/{SAMPLE}_R2_fp.fq",
+        html=f"fastq_read2/{SAMPLE}_fastp.html",
+        json=f"fastq_read2/{SAMPLE}_fastp.json"
+    threads: THREADS
     shell:
-        """
-        fastp \
-            -i {input.read1} \
-            -I {input.read2} \
-            -o {output.read1_fp} \
-            -O {output.read2_fp} \
-			-Q \
-            --umi \
-            --umi_loc=read2 \
-            --umi_len=15 \
-            --trim_front2=5 \
-            -l 80 \
-            -h {output.report}
-        """		
+        "fastp --thread {threads} -i {input.r1:q} -I {input.r2:q} "
+        "-o {output.r1:q} -O {output.r2:q} -Q --umi --umi_loc=read2 "
+        "--umi_len=15 --trim_front2=5 -l 80 "
+        "-h {output.html:q} -j {output.json:q}"
 
-rule align_R2_bowtie_genome_end_to_end:
-	input: 
-		f"fastq_read2/{sample}_R2_fp.fq"
-	output: 
-		f"R_input/R2_genome_mapped.tsv"
-	shell:
-		"""
-		bowtie2 --no-unal --threads 16 -x fasta/index_bowtie_genome/GRCh38_primary_genome -U {input} -S sam/R2_aligned_to_genome.sam
-		python R_scripts/extract_read_tags.py -i sam/R2_aligned_to_genome.sam -o {output}
-		"""
-	
-rule align_R2_to_masked_genome:
-	input:
-		f"fastq_read2/{sample}_R2_fp.fq"
-	output:
-		f"R2_aligned_to_masked_genome/Aligned.out.sam"
-	shell:
-		"""
-		STAR \
-  --genomeDir fasta/index_masked_genome_star/ \
-  --readFilesIn {input} \
-  --runThreadN 12 \
-  --outFileNamePrefix R2_aligned_to_masked_genome/ \
-  --outSAMtype SAM \
-  --outFilterMismatchNoverReadLmax 0.05 \
-  --alignIntronMax 50000 \
-  --outFilterMultimapNmax 1 \
-  --outSAMunmapped Within
-		"""
-	
-rule extract_columns_from_R1_R2:
+rule align_read2_genome:
     input:
-        read1_sam = f"sam/{sample}_R1_aligned.sam",
-        read2_sam = f"R2_aligned_to_masked_genome/Aligned.out.sam"
+        fastq=f"fastq_read2/{SAMPLE}_R2_fp.fq",
+        index=bowtie_first_index(GENOME_INDEX)
     output:
-        read1_cols = f"R_input/{sample}_R1_aligned.tsv",
-        read2_cols = f"R_input/{sample}_R2_aligned_to_masked_genome.tsv"
+        sam=f"sam/{SAMPLE}_R2_genome.sam",
+        tags=f"R_input/{SAMPLE}_R2_genome_mapped.tsv"
+    threads: THREADS
+    params:
+        index=GENOME_INDEX
     shell:
-        """
-        awk 'BEGIN {{OFS="\t"}} !/^@/ {{split($3, a, "|"); print $1, a[2], a[1], $2, $4, $5, $6}}' {input.read1_sam} > {output.read1_cols}
-        awk 'BEGIN {{OFS="\t"}} $1 !~ /^@/ {{print $1, $2, $3, $4, $6, $10}}' {input.read2_sam} > {output.read2_cols}
-        """
+        "bowtie2 --threads {threads} -k 2 --no-unal -x {params.index:q} "
+        "-U {input.fastq:q} -S {output.sam:q} && "
+        "python R_scripts/extract_read_tags.py -i {output.sam:q} -o {output.tags:q}"
+
+rule align_read2_masked_genome:
+    input:
+        fastq=f"fastq_read2/{SAMPLE}_R2_fp.fq",
+        index=str(Path(STAR_INDEX) / "Genome")
+    output:
+        f"R2_aligned_to_masked_genome/{SAMPLE}/Aligned.out.sam"
+    threads: THREADS
+    params:
+        index=STAR_INDEX,
+        prefix=f"R2_aligned_to_masked_genome/{SAMPLE}/"
+    shell:
+        "mkdir -p {params.prefix:q} && "
+        "bash scripts/star.sh --genomeDir {params.index:q} --readFilesIn {input.fastq:q} "
+        "--runThreadN {threads} --outFileNamePrefix {params.prefix:q} "
+        "--outSAMtype SAM --outFilterMismatchNoverReadLmax 0.05 "
+        "--alignIntronMax 50000 --outFilterMultimapNmax 1 "
+        "--outSAMunmapped Within && "
+        "python R_scripts/check_star_alignment.py {input.fastq:q} {output:q}"
+
+rule extract_alignment_tables:
+    input:
+        r1=f"sam/{SAMPLE}_R1_aligned.sam",
+        r2=f"R2_aligned_to_masked_genome/{SAMPLE}/Aligned.out.sam"
+    output:
+        r1=f"R_input/{SAMPLE}_R1_aligned.tsv",
+        r2=f"R_input/{SAMPLE}_R2_aligned_to_masked_genome.tsv"
+    shell:
+        "python R_scripts/sam_to_tables.py --r1 {input.r1:q} --r2 {input.r2:q} "
+        "--out-r1 {output.r1:q} --out-r2 {output.r2:q}"
 
 rule tail_analysis:
     input:
-        tabR1 = "R_input/{sample}_R1_aligned.tsv",
-        tabR2 = "R_input/{sample}_R2_aligned_to_masked_genome.tsv",
-        tabR2_2 = "R_input/R2_genome_mapped.tsv"
+        tabR1=f"R_input/{SAMPLE}_R1_aligned.tsv",
+        tabR2=f"R_input/{SAMPLE}_R2_aligned_to_masked_genome.tsv",
+        tabR2_2=f"R_input/{SAMPLE}_R2_genome_mapped.tsv",
+        annotation=ANNOTATION
     output:
-        big_table = "R_output/{sample}_final_big.rds",
-        small_table = "R_output/{sample}_final_small.rds",
-        deduplication = "R_output/{sample}_deduplication.csv"
+        big_table=f"R_output/{SAMPLE}_final_big.rds",
+        small_table=f"R_output/{SAMPLE}_final_small.rds",
+        deduplication=f"R_output/{SAMPLE}_deduplication.csv"
     script:
         "R_scripts/run_tail_analysis.R"
-

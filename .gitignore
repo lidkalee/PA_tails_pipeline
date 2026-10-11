@@ -18,3 +18,22 @@ fasta/index_masked_genome_star/*
 !fasta/index_bowtie_genome/.gitkeep
 !fasta/index_bowtie_transcriptome/.gitkeep
 !fasta/index_masked_genome_star/.gitkeep
+
+# Generated reads, references, and workflow outputs
+/demo/reads/
+/demo/reference/
+/sam/*.sam
+/sam/*.txt
+/R_input/*.tsv
+/R_output/*.rds
+/R_output/*.csv
+/R2_aligned_to_masked_genome/*/
+/fastq_read1/*_selected.fq
+/fastq_read1/*_fp.fq
+/fastq_read2/*_selected.fq
+/fastq_read2/*_fp.fq
+/fastq_read2/*_fastp.html
+/fastq_read2/*_fastp.json
+
+# Locally compiled STAR on Apple Silicon
+/tools/STAR

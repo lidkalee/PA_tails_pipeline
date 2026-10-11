@@ -1,0 +1,8 @@
+sample: demo
+R1: demo/fixtures/demo_R1.fq
+R2: demo/fixtures/demo_R2.fq
+transcriptome_index: demo/reference/transcript_index
+genome_index: demo/reference/genome_index
+star_index: demo/reference/star_index
+annotation: demo/reference/annotation.rds
+threads: 2

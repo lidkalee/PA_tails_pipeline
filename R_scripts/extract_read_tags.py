@@ -1,36 +1,28 @@
+"""Label Bowtie2 genome hits unique or multi using up to two reported alignments."""
+
 import argparse
-from collections import defaultdict
+from collections import Counter
+
 
 def parse_sam(sam_path, output_path):
-    read_counts = defaultdict(int)
-
-    # First pass: count read names
-    with open(sam_path, "r") as sam_file:
-        for line in sam_file:
-            if line.startswith("@"):
-                continue  # skip header
-            fields = line.strip().split("\t")
-            read_id = fields[0]
-            read_counts[read_id] += 1
-
-    # Second pass: write read names and mapping type
-    with open(sam_path, "r") as sam_file, open(output_path, "w") as out_file:
-        seen = set()
-        for line in sam_file:
+    counts = Counter()
+    with open(sam_path) as handle:
+        for line in handle:
             if line.startswith("@"):
                 continue
-            fields = line.strip().split("\t")
-            read_id = fields[0]
-            if read_id not in seen:
-                tag = "unique" if read_counts[read_id] == 1 else "multi"
-                out_file.write(f"{read_id}\t{tag}\n")
-                seen.add(read_id)
+            fields = line.rstrip("\n").split("\t")
+            if len(fields) < 2:
+                raise ValueError(f"Malformed SAM alignment in {sam_path}")
+            if not (int(fields[1]) & 4):
+                counts[fields[0]] += 1
+    with open(output_path, "w") as handle:
+        for name, count in counts.items():
+            handle.write(f"{name}\t{'unique' if count == 1 else 'multi'}\n")
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Extract mapped read names and classify as unique or multi-mappers.")
-    parser.add_argument("-i", "--input", required=True, help="Input SAM file")
-    parser.add_argument("-o", "--output", required=True, help="Output file to write read names and mapping status")
-
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("-i", "--input", required=True)
+    parser.add_argument("-o", "--output", required=True)
     args = parser.parse_args()
     parse_sam(args.input, args.output)
-

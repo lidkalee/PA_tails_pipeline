@@ -1,3 +1,9 @@
+# Paths are relative to the repository root; absolute paths also work.
 sample: t47
-R1: fastq_read1/t47_R1.fq
-R2: fastq_read2/t47_R2.fq
+R1: fastq_read1/t47_R1.fq.gz
+R2: fastq_read2/t47_R2.fq.gz
+transcriptome_index: fasta/index_bowtie_transcriptome/prot_coding_
+genome_index: fasta/index_bowtie_genome/GRCh38_primary_genome
+star_index: fasta/index_masked_genome_star
+annotation: annotation/gene_annotations.rds
+threads: 4

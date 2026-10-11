@@ -38,7 +38,7 @@ run_AT_tail_analysis_df <- function(df) {
     # 4.1 First cases when R2 mapped so CIGAR is present (is not NA or * !!! value here
     # may depend on the aligner)
     # I'm putting 2 conditions 1. CIGAR for R2 present; 2. R2 mapped to same chromosome as R1
-    if (cigar != "*" && chrR2 == seqnames) {
+    if (cigar != "*" && !is.na(seqnames) && chrR2 == seqnames) {
       # next line will establish gene stop position from annotation which depends
       # if gene is located on the - or + strand. Locations are from left to right.
       stop <- if (strand == "+") end else if (strand == "-") start else NA
