@@ -1,10 +1,9 @@
 """Load one or more paired FASTQ samples from Snakemake configuration."""
 
 import csv
-import re
 from pathlib import Path
 
-SAFE_SAMPLE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+from scripts.fastq_pairs import SAFE_SAMPLE, discover_pairs
 
 
 def _validate(sample, r1, r2, location):
@@ -40,5 +39,17 @@ def load_samples(config):
         if not samples:
             raise ValueError(f"{path}: sample sheet is empty")
         return samples
+    if config.get("fastq_dir"):
+        if config.get("r1_dir") or config.get("r2_dir"):
+            raise ValueError("Use fastq_dir or both r1_dir and r2_dir, not both modes")
+        pairs = discover_pairs(config["fastq_dir"], config["fastq_dir"])
+        return {sample: _validate(sample, str(r1), str(r2), "fastq_dir")
+                for sample, (r1, r2) in pairs.items()}
+    if config.get("r1_dir") or config.get("r2_dir"):
+        if not config.get("r1_dir") or not config.get("r2_dir"):
+            raise ValueError("Both r1_dir and r2_dir are required")
+        pairs = discover_pairs(config["r1_dir"], config["r2_dir"])
+        return {sample: _validate(sample, str(r1), str(r2), "read directories")
+                for sample, (r1, r2) in pairs.items()}
     sample = str(config["sample"])
     return {sample: _validate(sample, str(config["R1"]), str(config["R2"]), "config")}

@@ -31,29 +31,31 @@ python3 -m unittest discover -s tests -v
 
 ## Process many samples
 
-Put R1 files in one directory and R2 files in another (or use the same directory for both arguments if both mates are together). The pairing helper matches the shared sample ID, for example `may2026_PB25_2_R1.fastq.gz` with `may2026_PB25_2_R2.fastq.gz` (sample ID `may2026_PB25_2`). It refuses unmatched or duplicate IDs so a partial name cannot silently pair the wrong files.
+The workflow discovers pairs automatically. Files such as `may2026_PB25_2_R1.fastq.gz` and `may2026_PB25_2_R2.fastq.gz` become sample `may2026_PB25_2`. The names must differ only at the `R1`/`R2` token; a numeric suffix such as `_001`, if present, must also match. Missing mates and duplicate sample IDs stop the run with an error.
+
+If both mates are in one directory:
 
 ```bash
-python scripts/make_samplesheet.py \
-  --r1-dir fastq_R1 --r2-dir fastq_R2 --output samples.tsv
+snakemake --config fastq_dir=fastq --cores 8
+```
+
+If R1 and R2 are in separate directories:
+
+```bash
+snakemake --config r1_dir=fastq_R1 r2_dir=fastq_R2 --cores 8
+```
+
+The reference paths and per-alignment thread count still come from `config.yaml`. Run from the repository root. Every detected sample gets its own intermediate files and three final files in `R_output/`. To preview pairs or handle irregular filenames, create a tab-separated sample sheet instead:
+
+```bash
+python scripts/make_samplesheet.py --fastq-dir fastq --output samples.tsv
 cat samples.tsv
 snakemake --config samples=samples.tsv --cores 8
 ```
 
-The generated tab-separated `samples.tsv` has `sample`, `R1`, and `R2` columns. Inspect it before running. Paths are relative to the repository root when possible; files outside it use absolute paths. The generated sheet is ignored by Git. To regenerate it after adding files, pass `--force`.
+For two separate folders, the helper accepts `--r1-dir fastq_R1 --r2-dir fastq_R2` instead of `--fastq-dir`. The sheet has `sample`, `R1`, and `R2` columns; inspect it before running. It is ignored by Git, and `--force` regenerates an existing sheet. For names beyond the default pattern, use `--r1-regex` and `--r2-regex` with a named `(?P<sample>...)` group, or write the sheet manually. Sample IDs may contain ASCII letters, digits, `_`, and `-`. Multiple lanes for one biological sample must be merged into paired FASTQs first or listed as lane-specific samples.
 
-If names differ beyond the `R1`/`R2` token, provide regular expressions with a named `sample` group. For example, for `patient7_read1_runA.fastq.gz` and `patient7_read2_runA.fastq.gz`:
-
-```bash
-python scripts/make_samplesheet.py \
-  --r1-dir fastq_R1 --r2-dir fastq_R2 --output samples.tsv \
-  --r1-regex '^(?P<sample>.+)_read1_runA\.fastq\.gz$' \
-  --r2-regex '^(?P<sample>.+)_read2_runA\.fastq\.gz$'
-```
-
-For irregular filenames, write `samples.tsv` manually with one row per pair. Each row must have a unique sample ID using ASCII letters, digits, `_`, or `-`. Multiple lanes for one biological sample should be merged into paired FASTQs first, or listed as separate lane-specific sample IDs.
-
-A two-sample smoke test exercises automatic pairing and sample-specific outputs:
+A smoke test runs both folder layouts:
 
 ```bash
 bash scripts/run_batch_demo.sh
@@ -96,7 +98,7 @@ snakemake --configfile config.yaml --cores 8
 
 `--cores` is the machine-wide limit; `threads` is the per-alignment maximum. The three final files are `R_output/<sample>_final_big.rds`, `R_output/<sample>_final_small.rds`, and `R_output/<sample>_deduplication.csv`. The full table includes read-level alignment, tail composition, class, and type; the small table keeps the analysis columns without read identifiers, UMI, or raw sequence. The CSV reports counts before and after gene-plus-UMI deduplication.
 
-For multiple samples, use the sample sheet above. Intermediate files are sample-specific, so previous sample outputs can remain in place. For a dry run, add `-n`. If inputs or references change after a run, use `--forcerun` on the relevant rule or remove the affected outputs before rerunning.
+For multiple samples, use automatic folder discovery or a sample sheet as shown above. Intermediate files are sample-specific, so previous sample outputs can remain in place. For a dry run, add `-n`. If inputs or references change after a run, use `--forcerun` on the relevant rule or remove the affected outputs before rerunning.
 
 ## Troubleshooting
 

@@ -40,6 +40,18 @@ class SampleSheetTests(unittest.TestCase):
         self.assertEqual(pairs["may2026_PB25_2"][0].name, "may2026_PB25_2_R1.fastq.gz")
         self.assertEqual(pairs["may2026_PB25_2"][1].name, "may2026_PB25_2_R2.fastq.gz")
 
+    def test_config_discovers_one_folder_without_manifest(self):
+        (self.r1 / "may2026_PB25_2_R1.fastq.gz").touch()
+        (self.r1 / "may2026_PB25_2_R2.fastq.gz").touch()
+        samples = load_samples({"fastq_dir": str(self.r1), "sample": "legacy", "R1": "old1", "R2": "old2"})
+        self.assertEqual(list(samples), ["may2026_PB25_2"])
+
+    def test_config_discovers_separate_folders_without_manifest(self):
+        (self.r1 / "may2026_PB25_2_R1.fastq.gz").touch()
+        (self.r2 / "may2026_PB25_2_R2.fastq.gz").touch()
+        samples = load_samples({"r1_dir": str(self.r1), "r2_dir": str(self.r2)})
+        self.assertEqual(list(samples), ["may2026_PB25_2"])
+
     def test_partial_overlap_does_not_pair_wrong_samples(self):
         (self.r1 / "patient7_R1.fq").touch()
         (self.r2 / "patient70_R2.fq").touch()
@@ -51,6 +63,12 @@ class SampleSheetTests(unittest.TestCase):
         (self.r1 / "patient7_R1_001.fq").touch()
         (self.r2 / "patient7_R2.fq").touch()
         with self.assertRaisesRegex(ValueError, "Multiple R1 FASTQs"):
+            discover_pairs(self.r1, self.r2)
+
+    def test_numeric_suffixes_must_match(self):
+        (self.r1 / "patient7_R1_001.fastq.gz").touch()
+        (self.r2 / "patient7_R2_002.fastq.gz").touch()
+        with self.assertRaisesRegex(ValueError, "suffixes differ"):
             discover_pairs(self.r1, self.r2)
 
     def test_custom_regex_extracts_shared_part(self):
